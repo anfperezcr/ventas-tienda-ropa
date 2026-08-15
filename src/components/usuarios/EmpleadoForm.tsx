@@ -40,6 +40,8 @@ export function EmpleadoForm({
         <label className="flex flex-col gap-1 text-sm">
           Nombre
           <input
+            type="text"
+            inputMode="text"
             name="nombre"
             defaultValue={empleado?.nombre}
             className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
@@ -51,6 +53,8 @@ export function EmpleadoForm({
           <label className="mt-3 flex flex-col gap-1 text-sm">
             Usuario
             <input
+              type="text"
+              inputMode="text"
               name="usuario"
               autoComplete="off"
               className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"

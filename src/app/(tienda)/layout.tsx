@@ -5,6 +5,7 @@ import { obtenerConfiguracion } from "@/lib/configuracion/data";
 import { listarProductos } from "@/lib/productos/data";
 import { StockBajoBanner } from "@/components/StockBajoBanner";
 import { SyncProvider } from "@/components/offline/SyncProvider";
+import { IndicadorMetodoEntrada } from "@/components/touch-keyboard/IndicadorMetodoEntrada";
 
 export default async function TiendaLayout({
   children,
@@ -44,6 +45,7 @@ export default async function TiendaLayout({
           {session.rol === "owner" && <Link href="/configuracion">Configuración</Link>}
         </div>
         <div className="flex items-center gap-3">
+          <IndicadorMetodoEntrada />
           <span className="text-neutral-500">
             {session.nombre} · {session.rol}
           </span>

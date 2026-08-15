@@ -137,6 +137,8 @@ export function CatalogoProductos({
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
+          type="search"
+          inputMode="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar producto por nombre"

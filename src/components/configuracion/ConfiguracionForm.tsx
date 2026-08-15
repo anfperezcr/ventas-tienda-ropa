@@ -44,6 +44,8 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
             <label className="flex flex-col gap-1 text-sm">
               Nombre del negocio
               <input
+                type="text"
+                inputMode="text"
                 name="nombreNegocio"
                 value={nombreNegocio}
                 onChange={(e) => setNombreNegocio(e.target.value)}
@@ -69,6 +71,8 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
                   className="h-12 w-16 rounded-lg border border-neutral-300"
                 />
                 <input
+                  type="text"
+                  inputMode="text"
                   value={colorTexto}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -84,6 +88,8 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
             <label className="mt-3 flex flex-col gap-1 text-sm">
               Logo (URL, opcional)
               <input
+                type="url"
+                inputMode="url"
                 name="logoUrl"
                 value={logoUrl}
                 onChange={(e) => {
@@ -113,6 +119,7 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
             <label className="flex flex-col gap-1 text-sm">
               Mensaje de recibo
               <textarea
+                inputMode="text"
                 name="mensajeRecibo"
                 value={mensajeRecibo}
                 onChange={(e) => setMensajeRecibo(e.target.value)}

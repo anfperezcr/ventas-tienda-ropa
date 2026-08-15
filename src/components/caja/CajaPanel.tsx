@@ -23,6 +23,7 @@ import {
 } from "@/lib/offline/db";
 import { calcularEstadoEfectivo, fusionarBitacoraTurno, type ItemBitacoraFusionado } from "@/lib/offline/caja";
 import { generarClientRef } from "@/lib/offline/clientRef";
+import { soloDigitos } from "@/lib/soloDigitos";
 
 // Sin lista real de motivos en el modelo de datos -- esto es solo un
 // <datalist> de autocompletar, no restringe lo que se puede escribir ni
@@ -165,16 +166,19 @@ export function CajaPanel({
         <label className="flex flex-col gap-1 text-sm">
           Monto inicial
           <input
-            type="number"
-            min={0}
+            type="text"
+            inputMode="numeric"
+            data-teclado-moneda="true"
             value={montoInicial}
-            onChange={(e) => setMontoInicial(e.target.value)}
+            onChange={(e) => setMontoInicial(soloDigitos(e.target.value))}
             className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Motivo (opcional)
           <input
+            type="text"
+            inputMode="text"
             value={motivoApertura}
             onChange={(e) => setMotivoApertura(e.target.value)}
             className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
@@ -265,14 +269,17 @@ export function CajaPanel({
           </button>
         </div>
         <input
-          type="number"
-          min={0}
+          type="text"
+          inputMode="numeric"
+          data-teclado-moneda="true"
           value={montoMovimiento}
-          onChange={(e) => setMontoMovimiento(e.target.value)}
+          onChange={(e) => setMontoMovimiento(soloDigitos(e.target.value))}
           placeholder="Monto"
           className="mb-2 w-full rounded-lg border border-neutral-300 px-4 py-3 text-lg"
         />
         <input
+          type="text"
+          inputMode="text"
           list="motivos-sugeridos"
           value={motivoMovimiento}
           onChange={(e) => setMotivoMovimiento(e.target.value)}
@@ -362,10 +369,11 @@ export function CajaPanel({
       <div className="rounded-2xl border border-neutral-200 p-6">
         <h2 className="mb-2 font-semibold">Cerrar caja</h2>
         <input
-          type="number"
-          min={0}
+          type="text"
+          inputMode="numeric"
+          data-teclado-moneda="true"
           value={montoContado}
-          onChange={(e) => setMontoContado(e.target.value)}
+          onChange={(e) => setMontoContado(soloDigitos(e.target.value))}
           placeholder="Efectivo contado"
           className="mb-2 w-full rounded-lg border border-neutral-300 px-4 py-3 text-lg"
         />
@@ -379,6 +387,8 @@ export function CajaPanel({
           </p>
         )}
         <input
+          type="text"
+          inputMode="text"
           value={motivoCierre}
           onChange={(e) => setMotivoCierre(e.target.value)}
           placeholder="Motivo (opcional)"

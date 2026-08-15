@@ -16,6 +16,7 @@ import {
 } from "@/lib/offline/db";
 import { generarClientRef } from "@/lib/offline/clientRef";
 import { iniciales } from "@/lib/iniciales";
+import { soloDigitos } from "@/lib/soloDigitos";
 
 type ItemCarrito = {
   productoId: number;
@@ -345,6 +346,8 @@ export function VentaForm({
           </div>
           <div className="flex gap-2">
             <input
+              type="tel"
+              inputMode="tel"
               value={telefono}
               onChange={(e) => {
                 setTelefono(e.target.value);
@@ -365,6 +368,8 @@ export function VentaForm({
           )}
           {busqueda === "no-encontrado" && (
             <input
+              type="text"
+              inputMode="text"
               value={nombreCliente}
               onChange={(e) => setNombreCliente(e.target.value)}
               placeholder="Nombre del cliente nuevo"
@@ -383,6 +388,8 @@ export function VentaForm({
             <TituloPaso numero={2}>Selecciona productos</TituloPaso>
           </div>
           <input
+            type="search"
+            inputMode="search"
             value={busquedaProducto}
             onChange={(e) => setBusquedaProducto(e.target.value)}
             placeholder="Buscar producto por nombre"
@@ -497,10 +504,11 @@ export function VentaForm({
             ))}
           </div>
           <input
-            type="number"
-            min={0}
+            type="text"
+            inputMode="numeric"
+            data-teclado-moneda="true"
             value={primerPago.monto || ""}
-            onChange={(e) => actualizarPago(0, { monto: Number(e.target.value) })}
+            onChange={(e) => actualizarPago(0, { monto: Number(soloDigitos(e.target.value)) })}
             className="mt-2 w-full rounded-lg border border-neutral-300 px-4 py-3 text-lg"
           />
 
@@ -518,10 +526,11 @@ export function VentaForm({
                   <option value="daviplata">Daviplata</option>
                 </select>
                 <input
-                  type="number"
-                  min={0}
+                  type="text"
+                  inputMode="numeric"
+                  data-teclado-moneda="true"
                   value={pago.monto || ""}
-                  onChange={(e) => actualizarPago(index, { monto: Number(e.target.value) })}
+                  onChange={(e) => actualizarPago(index, { monto: Number(soloDigitos(e.target.value)) })}
                   className="flex-1 rounded-lg border border-neutral-300 px-3 py-2"
                 />
                 <button

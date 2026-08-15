@@ -35,6 +35,8 @@ export function CrearTenantForm() {
             <label className="flex flex-col gap-1 text-sm">
               Nombre del negocio
               <input
+                type="text"
+                inputMode="text"
                 name="nombreNegocio"
                 value={nombreNegocio}
                 onChange={(e) => setNombreNegocio(e.target.value)}
@@ -45,6 +47,8 @@ export function CrearTenantForm() {
             <label className="mt-3 flex flex-col gap-1 text-sm">
               Slug (para /login/&lt;slug&gt;)
               <input
+                type="text"
+                inputMode="text"
                 name="slug"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
@@ -65,9 +69,8 @@ export function CrearTenantForm() {
               Días de período de gracia
               <input
                 name="diasGracia"
-                type="number"
-                min={0}
-                step="1"
+                type="text"
+                inputMode="numeric"
                 defaultValue={5}
                 className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
                 required
@@ -83,6 +86,8 @@ export function CrearTenantForm() {
             <label className="flex flex-col gap-1 text-sm">
               Nombre
               <input
+                type="text"
+                inputMode="text"
                 name="ownerNombre"
                 className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
                 required
@@ -91,6 +96,8 @@ export function CrearTenantForm() {
             <label className="mt-3 flex flex-col gap-1 text-sm">
               Usuario
               <input
+                type="text"
+                inputMode="text"
                 name="ownerUsuario"
                 autoComplete="off"
                 className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"

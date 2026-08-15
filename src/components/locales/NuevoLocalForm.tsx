@@ -24,6 +24,8 @@ export function NuevoLocalForm() {
     >
       <p className="font-medium">Nuevo local</p>
       <input
+        type="text"
+        inputMode="text"
         name="nombre"
         placeholder="Nombre"
         className="rounded-lg border border-neutral-300 px-3 py-2"

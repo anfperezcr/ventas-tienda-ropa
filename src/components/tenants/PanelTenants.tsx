@@ -74,6 +74,8 @@ export function PanelTenants({ tenants }: { tenants: TenantConEstado[] }) {
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
+          type="search"
+          inputMode="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o slug"

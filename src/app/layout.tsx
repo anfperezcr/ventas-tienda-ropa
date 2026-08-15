@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { SerwistProvider } from "@serwist/turbopack/react";
+import { TouchKeyboardProvider } from "@/components/touch-keyboard/TouchKeyboardContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,7 +39,12 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SerwistProvider swUrl="/serwist/sw.js">{children}</SerwistProvider>
+        <SerwistProvider swUrl="/serwist/sw.js">
+          {/* Único montaje global -- cubre /login, /(tienda)/* y
+              /super-admin/* por igual (ticket §29: "no limitar la
+              funcionalidad al POS"). */}
+          <TouchKeyboardProvider>{children}</TouchKeyboardProvider>
+        </SerwistProvider>
       </body>
     </html>
   );

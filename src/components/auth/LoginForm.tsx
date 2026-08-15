@@ -41,6 +41,8 @@ export function LoginForm({ slug }: { slug?: string }) {
       <label className="flex flex-col gap-1 text-sm">
         Usuario
         <input
+          type="text"
+          inputMode="text"
           className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
           value={usuario}
           onChange={(e) => setUsuario(e.target.value)}

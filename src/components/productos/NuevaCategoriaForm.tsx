@@ -24,12 +24,16 @@ export function NuevaCategoriaForm() {
     >
       <p className="font-medium">Nueva categoría</p>
       <input
+        type="text"
+        inputMode="text"
         name="nombre"
         placeholder="Nombre"
         className="rounded-lg border border-neutral-300 px-3 py-2"
         required
       />
       <input
+        type="text"
+        inputMode="text"
         name="tallasSugeridas"
         placeholder="Tallas sugeridas (separadas por coma, opcional)"
         className="rounded-lg border border-neutral-300 px-3 py-2"

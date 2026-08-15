@@ -57,6 +57,8 @@ export function ProductoForm({
             <label className="flex flex-col gap-1 text-sm">
               Nombre
               <input
+                type="text"
+                inputMode="text"
                 name="nombre"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
@@ -108,6 +110,8 @@ export function ProductoForm({
                   </select>
                 ) : (
                   <input
+                    type="text"
+                    inputMode="text"
                     name="talla"
                     defaultValue={producto?.talla}
                     className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
@@ -146,9 +150,8 @@ export function ProductoForm({
                   Stock inicial
                   <input
                     name="stockInicial"
-                    type="number"
-                    min={0}
-                    step="1"
+                    type="text"
+                    inputMode="numeric"
                     defaultValue={0}
                     className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
                     required
@@ -159,9 +162,8 @@ export function ProductoForm({
                 Stock mínimo
                 <input
                   name="stockMinimo"
-                  type="number"
-                  min={0}
-                  step="1"
+                  type="text"
+                  inputMode="numeric"
                   defaultValue={producto?.stockMinimo ?? 5}
                   className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
                   required
@@ -181,9 +183,9 @@ export function ProductoForm({
               Precio de venta
               <input
                 name="precio"
-                type="number"
-                min={0}
-                step="1"
+                type="text"
+                inputMode="numeric"
+                data-teclado-moneda="true"
                 defaultValue={producto?.precio}
                 className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
                 required
@@ -196,6 +198,8 @@ export function ProductoForm({
             <label className="flex flex-col gap-1 text-sm">
               URL de la imagen
               <input
+                type="url"
+                inputMode="url"
                 name="imagenUrl"
                 value={imagenUrl}
                 onChange={(e) => {
