@@ -29,9 +29,12 @@ export function SelectorMetodoEntrada() {
 
   return (
     <div className="rounded-2xl border border-neutral-200 p-4">
-      <h2 className="mb-1 font-semibold">Experiencia de uso</h2>
+      <h2 className="mb-1 flex items-center gap-2 font-semibold">
+        <span aria-hidden="true">🖥️</span> Experiencia de uso
+      </h2>
       <p className="mb-3 text-sm text-neutral-500">
-        Método de entrada — se guarda solo en este dispositivo, no afecta a otros.
+        Elige cómo deseas interactuar con la aplicación — se guarda solo en este dispositivo, no
+        afecta a otros.
       </p>
       <div role="radiogroup" aria-label="Método de entrada" className="flex flex-col gap-2">
         {OPCIONES.map((op) => {
@@ -67,6 +70,16 @@ export function SelectorMetodoEntrada() {
             </button>
           );
         })}
+      </div>
+      <div className="mt-3 flex gap-2 rounded-xl bg-blue-50 p-3 text-sm text-blue-900">
+        <span aria-hidden="true">ℹ️</span>
+        <p>
+          <span className="font-medium">¿Qué modo elegir?</span>
+          <br />
+          Si usas la app en tablet o pantalla táctil, elige <strong>Modo táctil</strong>.
+          <br />
+          Si usas computador con teclado y mouse, elige <strong>Modo teclado</strong>.
+        </p>
       </div>
     </div>
   );
