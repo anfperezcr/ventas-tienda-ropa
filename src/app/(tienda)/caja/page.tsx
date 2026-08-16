@@ -12,9 +12,13 @@ export default async function CajaPage({
   const session = await requireTenantSession();
   const { local } = await searchParams;
 
-  const locales = session.rol === "owner" ? await listarLocales(session.tenantId!) : [];
+  // Se necesita para todos los roles ahora (no solo owner): CajaPanel
+  // muestra "Caja: {nombreLocal}" en el encabezado, y un empleado
+  // también necesita ver el nombre de su propio local ahí.
+  const locales = await listarLocales(session.tenantId!);
   const localId =
     session.rol === "empleado" ? (session.localId ?? undefined) : Number(local) || locales[0]?.id;
+  const nombreLocal = locales.find((l) => l.id === localId)?.nombre ?? "—";
 
   const estado = localId ? await obtenerEstadoTurno(session.tenantId!, localId) : null;
   const movimientos =
@@ -24,8 +28,6 @@ export default async function CajaPage({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-6">
-      <h1 className="text-xl font-semibold">Caja</h1>
-
       {session.rol === "owner" && locales.length > 1 && (
         <div className="flex gap-2 text-sm">
           {locales.map((l) => (
@@ -45,7 +47,13 @@ export default async function CajaPage({
       )}
 
       {localId && estado ? (
-        <CajaPanel tenantId={session.tenantId!} localId={localId} estado={estado} movimientos={movimientos} />
+        <CajaPanel
+          tenantId={session.tenantId!}
+          localId={localId}
+          nombreLocal={nombreLocal}
+          estado={estado}
+          movimientos={movimientos}
+        />
       ) : (
         <p className="text-sm text-neutral-500">No hay locales configurados.</p>
       )}
