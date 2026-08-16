@@ -68,6 +68,22 @@ Existe un proyecto hermano previo, mono-tienda (para un negocio familiar con dos
 | Modo offline | IndexedDB (local) + cola de sincronización a Supabase | El mostrador no puede depender de tener internet en el momento |
 | Instalación | PWA (Progressive Web App) | Se instala desde el navegador en cualquier dispositivo, sin tienda de apps |
 | Impresora térmica + cajón de dinero | Servicio puente local (Node.js) corriendo en el PC del mostrador (Windows) | Un navegador no le habla directo al hardware; solo aplica a mostradores con PC, no a tablets/celulares |
+| Imágenes de producto | Supabase Storage, bucket `productos` (público, solo lectura) | Foto real subida desde el dispositivo, no solo URL pegada a mano; ver detalle abajo |
+
+**Subida de imágenes (Storage):** canal aparte de la conexión Postgres de
+arriba (usa la API REST de Supabase, no `postgres.js`). Como el auth es
+casero (no Supabase Auth), las políticas RLS de `storage.objects` no
+aplican -- en su lugar, **solo código server-only** (`src/lib/storage/`)
+sube o borra objetos, usando la service role key (nunca en un archivo
+`"use client"`, nunca en el navegador). El aislamiento por tenant se hace
+por convención de ruta (`productos/{tenantId}/{uuid}.ext`), no por
+política de Storage -- el bucket es público de solo lectura porque son
+solo fotos de producto, no datos de negocio. Antes de subir, el archivo
+se redimensiona/recomprime en `<canvas>` en el navegador (máx ~1600px,
+JPEG ~80%) para estirar el 1GB del free tier de Supabase Storage. Al
+reemplazar o quitar una imagen, la anterior se borra de Storage
+best-effort (no bloquea el guardado si falla) -- solo si esa URL vive en
+nuestro bucket, nunca si es un link externo pegado a mano.
 
 **Regla de oro offline-first:** ninguna acción del mostrador (venta, apertura de caja, alerta de stock) puede depender de tener internet en ese momento. Internet solo se usa para: (1) el primer login de cada dispositivo, y (2) sincronizar/ver reportes remotos.
 

@@ -74,6 +74,49 @@ export async function listarProductos(
   });
 }
 
+// Todas las filas del mismo grupo que /venta agruparía (VentaForm.tsx:
+// clave = nombre.trim().toLowerCase() + categoriaId) -- usado por la
+// pantalla de edición para mostrar y guardar todas las tallas de un
+// producto de una sola vez. Incluye inactivas a propósito: si el owner
+// entra a editar justo una talla desactivada (el link "Editar" de
+// /productos no filtra por activo), la fila igual debe aparecer -- si no,
+// la pantalla se queda sin variantes que mostrar. guardarGrupoProducto
+// nunca toca la columna activo, así que esto no reactiva nada solo.
+export async function listarVariantesGrupo(
+  tenantId: string,
+  nombre: string,
+  categoriaId: number
+): Promise<Producto[]> {
+  return withTenant(tenantId, async (tx) => {
+    const rows = await tx<ProductoRow[]>`
+      select
+        p.id, p.nombre, p.categoria_id, c.nombre as categoria_nombre,
+        p.talla, p.precio, p.stock, p.stock_minimo, p.local_id,
+        l.nombre as local_nombre, p.activo, p.imagen_url
+      from productos p
+      join categorias c on c.id = p.categoria_id
+      join locales l on l.id = p.local_id
+      where lower(trim(p.nombre)) = lower(trim(${nombre}))
+        and p.categoria_id = ${categoriaId}
+      order by p.talla
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      categoriaId: row.categoria_id,
+      categoriaNombre: row.categoria_nombre,
+      talla: row.talla,
+      precio: row.precio,
+      stock: row.stock,
+      stockMinimo: row.stock_minimo,
+      localId: row.local_id,
+      localNombre: row.local_nombre,
+      activo: row.activo,
+      imagenUrl: row.imagen_url,
+    }));
+  });
+}
+
 export async function obtenerProducto(
   tenantId: string,
   productoId: number

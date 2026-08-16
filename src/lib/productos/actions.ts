@@ -1,118 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import postgres from "postgres";
 import { withTenant } from "@/lib/db/tenant";
 import { requireOwner, requireTenantSession } from "@/lib/auth/guards";
 import { listarProductos, type Producto } from "./data";
+import {
+  subirImagenProductoStorage,
+  borrarImagenProductoStorageSiPropia,
+  type SubirImagenResultado,
+} from "@/lib/storage/imagenesProducto";
 
-export type ProductoFormState = {
-  error: string | null;
-};
-
-type ParseComunesResult =
-  | { ok: true; nombre: string; categoriaId: number; talla: string; precio: number; stockMinimo: number; localId: number; imagenUrl: string | null }
-  | { ok: false; error: string };
-
-function parseComunes(formData: FormData): ParseComunesResult {
-  const nombre = String(formData.get("nombre") ?? "").trim();
-  const categoriaId = Number(formData.get("categoriaId"));
-  const talla = String(formData.get("talla") ?? "").trim();
-  const precio = Number(formData.get("precio"));
-  const stockMinimo = Number(formData.get("stockMinimo"));
-  const localId = Number(formData.get("localId"));
-  const imagenUrl = String(formData.get("imagenUrl") ?? "").trim();
-
-  if (!nombre || !talla || !Number.isInteger(categoriaId) || !Number.isInteger(localId)) {
-    return { ok: false, error: "Todos los campos son obligatorios" };
-  }
-  if (!Number.isFinite(precio) || precio < 0) {
-    return { ok: false, error: "El precio debe ser un número mayor o igual a 0" };
-  }
-  if (!Number.isInteger(stockMinimo) || stockMinimo < 0) {
-    return { ok: false, error: "El stock mínimo debe ser un entero mayor o igual a 0" };
-  }
-  // Mismo criterio que logoUrl en actualizarConfiguracion (Fase 5) -- la
-  // vista previa en el formulario ya la renderiza como <img src=...>, así
-  // que server-side también se valida el esquema antes de guardar.
-  if (imagenUrl && !/^https?:\/\//i.test(imagenUrl)) {
-    return { ok: false, error: "La URL de la imagen debe empezar con http:// o https://" };
-  }
-
-  return {
-    ok: true,
-    nombre,
-    categoriaId,
-    talla,
-    precio,
-    stockMinimo,
-    localId,
-    imagenUrl: imagenUrl || null,
-  };
-}
-
-export async function crearProducto(
-  _prevState: ProductoFormState,
-  formData: FormData
-): Promise<ProductoFormState> {
+export async function subirImagenProducto(formData: FormData): Promise<SubirImagenResultado> {
   const session = await requireOwner();
 
-  const parsed = parseComunes(formData);
-  if (!parsed.ok) return { error: parsed.error };
-
-  const stockInicial = Number(formData.get("stockInicial"));
-  if (!Number.isInteger(stockInicial) || stockInicial < 0) {
-    return { error: "El stock inicial debe ser un entero mayor o igual a 0" };
+  const archivo = formData.get("archivo");
+  if (!(archivo instanceof File)) {
+    return { ok: false, error: "No se recibió ningún archivo" };
   }
 
-  try {
-    await withTenant(session.tenantId!, async (tx) => {
-      await tx`
-        insert into productos (tenant_id, nombre, categoria_id, talla, precio, stock, stock_minimo, local_id, imagen_url)
-        values (
-          ${session.tenantId}, ${parsed.nombre}, ${parsed.categoriaId}, ${parsed.talla},
-          ${parsed.precio}, ${stockInicial}, ${parsed.stockMinimo}, ${parsed.localId}, ${parsed.imagenUrl}
-        )
-      `;
-    });
-  } catch {
-    return { error: "No se pudo crear el producto" };
-  }
-
-  revalidatePath("/productos");
-  redirect("/productos");
-}
-
-export async function actualizarProducto(
-  productoId: number,
-  _prevState: ProductoFormState,
-  formData: FormData
-): Promise<ProductoFormState> {
-  const session = await requireOwner();
-
-  const parsed = parseComunes(formData);
-  if (!parsed.ok) return { error: parsed.error };
-
-  try {
-    await withTenant(session.tenantId!, async (tx) => {
-      await tx`
-        update productos
-        set nombre = ${parsed.nombre},
-            categoria_id = ${parsed.categoriaId},
-            talla = ${parsed.talla},
-            precio = ${parsed.precio},
-            stock_minimo = ${parsed.stockMinimo},
-            local_id = ${parsed.localId},
-            imagen_url = ${parsed.imagenUrl}
-        where id = ${productoId}
-      `;
-    });
-  } catch {
-    return { error: "No se pudo actualizar el producto" };
-  }
-
-  revalidatePath("/productos");
-  redirect("/productos");
+  return subirImagenProductoStorage(session.tenantId!, archivo);
 }
 
 export async function alternarActivoProducto(productoId: number): Promise<void> {
@@ -167,6 +74,160 @@ export async function ajustarStock(
     }
     return { error: "No se pudo ajustar el stock", stockResultante: null };
   }
+}
+
+export type FilaGrupoInput = {
+  id: number | null; // null = fila nueva, todavía no existe en productos
+  talla: string;
+  precio: number;
+  stock: number;
+  eliminar: boolean;
+};
+
+export type GuardarGrupoInput = {
+  nombre: string;
+  categoriaId: number;
+  localId: number;
+  imagenUrl: string | null;
+  // Valor de imagenUrl ANTES de esta edición (null en creación, donde no
+  // hay imagen previa que borrar). Sirve solo para el borrado best-effort
+  // de Storage después de guardar -- guardarGrupoProducto es una Server
+  // Action sin estado propio, así que quien llama debe decirle qué había
+  // antes si quiere que el reemplazo limpie el objeto viejo.
+  imagenUrlAnterior?: string | null;
+  stockMinimo: number;
+  filas: FilaGrupoInput[];
+};
+
+export type GuardarGrupoResult = { ok: true } | { ok: false; error: string };
+
+const MOTIVO_AJUSTE_EDICION = "Ajuste desde edición de producto";
+
+// Edita todas las tallas de un mismo grupo (nombre+categoría, misma
+// clave que agrupa VentaForm) en una sola operación: la tabla de
+// /productos/[id]/editar llama esto directo (no useActionState/FormData
+// -- el payload es un array, no un formulario plano).
+export async function guardarGrupoProducto(input: GuardarGrupoInput): Promise<GuardarGrupoResult> {
+  const session = await requireOwner();
+
+  const nombre = input.nombre.trim();
+  if (!nombre) return { ok: false, error: "El nombre es obligatorio" };
+  if (!Number.isInteger(input.categoriaId)) return { ok: false, error: "Elige una categoría" };
+  if (!Number.isInteger(input.localId)) return { ok: false, error: "Elige un local" };
+  if (!Number.isInteger(input.stockMinimo) || input.stockMinimo < 0) {
+    return { ok: false, error: "El stock mínimo debe ser un entero mayor o igual a 0" };
+  }
+  const imagenUrl = input.imagenUrl?.trim() || null;
+  if (imagenUrl && !/^https?:\/\//i.test(imagenUrl)) {
+    return { ok: false, error: "La URL de la imagen debe empezar con http:// o https://" };
+  }
+
+  const filasQueQuedan = input.filas.filter((f) => !f.eliminar);
+  if (filasQueQuedan.length === 0) {
+    return { ok: false, error: "El producto debe tener al menos una talla" };
+  }
+  for (const fila of filasQueQuedan) {
+    if (!fila.talla.trim()) return { ok: false, error: "Todas las tallas deben tener un valor" };
+    if (!Number.isFinite(fila.precio) || fila.precio < 0) {
+      return { ok: false, error: "El precio debe ser un número mayor o igual a 0" };
+    }
+    if (!Number.isInteger(fila.stock) || fila.stock < 0) {
+      return { ok: false, error: "El stock debe ser un entero mayor o igual a 0" };
+    }
+  }
+
+  try {
+    await withTenant(session.tenantId!, async (tx) => {
+      for (const fila of input.filas) {
+        // Fila nueva marcada para eliminar antes de guardarse -- nunca
+        // llegó a existir en la base, no hay nada que hacer.
+        if (fila.id === null && fila.eliminar) continue;
+
+        if (fila.id === null) {
+          await tx`
+            insert into productos
+              (tenant_id, nombre, categoria_id, talla, precio, stock, stock_minimo, local_id, imagen_url)
+            values (
+              ${session.tenantId}, ${nombre}, ${input.categoriaId}, ${fila.talla.trim()},
+              ${fila.precio}, ${fila.stock}, ${input.stockMinimo}, ${input.localId}, ${imagenUrl}
+            )
+          `;
+          continue;
+        }
+
+        if (fila.eliminar) {
+          // Intenta borrar de verdad -- si detalle_venta o ajustes_stock
+          // ya referencian esta fila, el DELETE viola su FK (código
+          // 23503) y el savepoint lo revierte SIN abortar el resto de la
+          // transacción, para caer a desactivar. Cualquier otro tipo de
+          // error (conexión, timeout, etc.) se relanza tal cual -- nunca
+          // se enmascara como "tiene historial".
+          let borrada = true;
+          try {
+            await tx.savepoint(async (sp) => {
+              await sp`delete from productos where id = ${fila.id}`;
+            });
+          } catch (err) {
+            if (err instanceof postgres.PostgresError && err.code === "23503") {
+              borrada = false;
+            } else {
+              throw err;
+            }
+          }
+          if (!borrada) {
+            await tx`update productos set activo = false where id = ${fila.id}`;
+          }
+          continue;
+        }
+
+        await tx`
+          update productos
+          set nombre = ${nombre},
+              categoria_id = ${input.categoriaId},
+              talla = ${fila.talla.trim()},
+              precio = ${fila.precio},
+              stock_minimo = ${input.stockMinimo},
+              local_id = ${input.localId},
+              imagen_url = ${imagenUrl}
+          where id = ${fila.id}
+        `;
+
+        // El delta se calcula contra el stock que hay AHORA en la base
+        // (no contra el valor que el owner vio al abrir la pantalla) --
+        // así el resultado final es exactamente lo que escribió, sin
+        // importar si algo más (una venta, otro ajuste) movió el stock
+        // mientras tenía la pantalla abierta.
+        const [actual] = await tx<{ stock: number }[]>`
+          select stock from productos where id = ${fila.id}
+        `;
+        const delta = fila.stock - actual.stock;
+        if (delta !== 0) {
+          await tx`
+            select ajustar_stock(
+              ${session.tenantId}, ${session.usuarioId}, ${fila.id}, ${delta}, ${MOTIVO_AJUSTE_EDICION}
+            )
+          `;
+        }
+      }
+    });
+  } catch (err) {
+    const mensaje = err instanceof Error ? err.message : "";
+    if (mensaje.includes("negativo")) {
+      return { ok: false, error: "Uno de los ajustes dejaría el stock en negativo" };
+    }
+    return { ok: false, error: "No se pudo guardar el producto" };
+  }
+
+  revalidatePath("/productos");
+
+  if (input.imagenUrlAnterior && input.imagenUrlAnterior !== imagenUrl) {
+    // Best-effort, fuera de la transacción -- si falla queda un huérfano
+    // en Storage, pero el guardado en base de datos ya es válido y no se
+    // revierte por esto (borrarImagenProductoStorageSiPropia ya no lanza).
+    void borrarImagenProductoStorageSiPropia(input.imagenUrlAnterior);
+  }
+
+  return { ok: true };
 }
 
 // El cliente la llama directo (Fase 7.2) para refrescar el cache de

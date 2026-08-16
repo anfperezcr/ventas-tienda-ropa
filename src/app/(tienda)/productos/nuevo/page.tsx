@@ -1,8 +1,7 @@
 import { requireOwner } from "@/lib/auth/guards";
 import { listarCategorias } from "@/lib/categorias/data";
 import { listarLocales } from "@/lib/locales/data";
-import { crearProducto } from "@/lib/productos/actions";
-import { ProductoForm } from "@/components/productos/ProductoForm";
+import { NuevoProductoForm } from "@/components/productos/NuevoProductoForm";
 import { NuevaCategoriaForm } from "@/components/productos/NuevaCategoriaForm";
 
 export default async function NuevoProductoPage() {
@@ -13,8 +12,8 @@ export default async function NuevoProductoPage() {
   ]);
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-6">
-      <ProductoForm action={crearProducto} categorias={categorias} locales={locales} />
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-6">
+      <NuevoProductoForm categorias={categorias} locales={locales} />
       <NuevaCategoriaForm />
     </main>
   );

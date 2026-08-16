@@ -45,6 +45,23 @@ function formatCOP(valor: number): string {
   return `$${valor.toLocaleString("es-CO")}`;
 }
 
+type GrupoProducto = { key: string; nombre: string; variantes: Producto[] };
+
+// Porteo directo de reference/proyecto-hermano/src/components/VentaForm.tsx
+// (CLAUDE.md §14: reusar la lógica de negocio del hermano, no reescribirla) --
+// letras en su orden natural primero, después numérico o alfabético para
+// cualquier otro valor de talla (ej. "Única").
+const ORDEN_TALLA = ["XS", "S", "M", "L", "XL", "XXL"];
+function compararTalla(a: string, b: string): number {
+  const ia = ORDEN_TALLA.indexOf(a);
+  const ib = ORDEN_TALLA.indexOf(b);
+  if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  const na = Number(a);
+  const nb = Number(b);
+  if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+  return a.localeCompare(b);
+}
+
 // El cambio siempre se entrega en efectivo (CLAUDE.md §2 -- nequi/daviplata
 // son transferencias, no hay forma física de "devolver" ahí). Antes de
 // enviar la venta se descuenta el cambio de la(s) fila(s) de efectivo, así
@@ -72,28 +89,86 @@ function TituloPaso({ numero, children }: { numero: number; children: React.Reac
   );
 }
 
-function TarjetaProducto({ producto, onAgregar }: { producto: Producto; onAgregar: () => void }) {
+// key={imagenUrl} en el componente completo -- reinicia el estado de
+// error al cambiar de talla seleccionada (cada fila de productos puede
+// traer su propia imagen_url, no es un dato del "grupo").
+function IconoGrupo({ nombre, imagenUrl }: { nombre: string; imagenUrl: string | null }) {
+  return <IconoGrupoInterno key={imagenUrl ?? "sin-imagen"} nombre={nombre} imagenUrl={imagenUrl} />;
+}
+
+function IconoGrupoInterno({ nombre, imagenUrl }: { nombre: string; imagenUrl: string | null }) {
+  const [error, setError] = useState(false);
+
+  if (imagenUrl && !error) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria del owner, sin dominios configurados para next/image
+      <img
+        src={imagenUrl}
+        alt=""
+        className="h-14 w-14 shrink-0 rounded-lg object-cover"
+        onError={() => setError(true)}
+      />
+    );
+  }
+
   return (
-    <button
-      onClick={onAgregar}
-      disabled={producto.stock <= 0}
-      className="flex flex-col items-start gap-2 rounded-xl border border-neutral-200 p-3 text-left disabled:opacity-40"
+    <div
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-sm font-semibold"
+      style={{
+        backgroundColor: "color-mix(in srgb, var(--brand-600) 12%, white)",
+        color: "var(--brand-600)",
+      }}
     >
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-lg text-sm font-semibold"
-        style={{
-          backgroundColor: "color-mix(in srgb, var(--brand-600) 12%, white)",
-          color: "var(--brand-600)",
-        }}
-      >
-        {iniciales(producto.nombre)}
+      {iniciales(nombre)}
+    </div>
+  );
+}
+
+function TarjetaProductoAgrupada({
+  grupo,
+  onAgregar,
+}: {
+  grupo: GrupoProducto;
+  onAgregar: (producto: Producto) => void;
+}) {
+  const tallasOrdenadas = [...grupo.variantes].sort((a, b) => compararTalla(a.talla, b.talla));
+  const primeraConStock = tallasOrdenadas.find((v) => v.stock > 0) ?? tallasOrdenadas[0];
+  const [tallaSeleccionadaId, setTallaSeleccionadaId] = useState(primeraConStock.id);
+  const seleccionada =
+    tallasOrdenadas.find((v) => v.id === tallaSeleccionadaId) ?? tallasOrdenadas[0];
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-neutral-200 p-3 text-left">
+      <div className="flex items-center gap-3">
+        <IconoGrupo nombre={grupo.nombre} imagenUrl={seleccionada.imagenUrl} />
+        <div className="min-w-0">
+          <p className="truncate font-medium">{grupo.nombre}</p>
+          <p className="text-xs text-neutral-500">
+            Talla {seleccionada.talla} · stock {seleccionada.stock}
+          </p>
+          <p className="font-medium">${seleccionada.precio.toLocaleString("es-CO")}</p>
+        </div>
       </div>
-      <span className="font-medium">{producto.nombre}</span>
-      <span className="text-xs text-neutral-500">
-        Talla {producto.talla} · stock {producto.stock}
-      </span>
-      <span className="font-medium">${producto.precio.toLocaleString("es-CO")}</span>
-    </button>
+      <div className="flex flex-wrap gap-2">
+        {tallasOrdenadas.map((v) => (
+          <button
+            key={v.id}
+            onClick={() => {
+              setTallaSeleccionadaId(v.id);
+              onAgregar(v);
+            }}
+            disabled={v.stock <= 0}
+            className={`min-h-11 min-w-11 rounded-lg border px-3 text-sm font-medium disabled:opacity-40 ${
+              v.id === seleccionada.id
+                ? "border-[var(--brand-600)] bg-[var(--brand-600)] text-white"
+                : "border-neutral-300"
+            }`}
+          >
+            {v.talla}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -152,6 +227,25 @@ export function VentaForm({
       (busquedaProducto.trim() === "" ||
         p.nombre.toLowerCase().includes(busquedaProducto.trim().toLowerCase()))
   );
+
+  // Agrupa las tallas de un mismo producto en una sola tarjeta -- misma
+  // clave que reference/proyecto-hermano (nombre normalizado, sin
+  // distinguir mayúsculas/minúsculas) más categoriaId, para no mezclar
+  // dos productos distintos que por casualidad compartan nombre en
+  // categorías distintas. Sin cambio de schema: sigue siendo una fila de
+  // `productos` por talla, esto solo agrupa en el cliente para mostrar.
+  const grupos: GrupoProducto[] = (() => {
+    const mapa = new Map<string, Producto[]>();
+    for (const p of productosFiltrados) {
+      const clave = `${p.nombre.trim().toLowerCase()}|${p.categoriaId}`;
+      const lista = mapa.get(clave) ?? [];
+      lista.push(p);
+      mapa.set(clave, lista);
+    }
+    return Array.from(mapa.entries())
+      .map(([key, variantes]) => ({ key, nombre: variantes[0].nombre, variantes }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  })();
 
   const total = carrito.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
   const totalPagos = pagos.reduce((sum, p) => sum + p.monto, 0);
@@ -421,8 +515,8 @@ export function VentaForm({
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-            {productosFiltrados.map((p) => (
-              <TarjetaProducto key={p.id} producto={p} onAgregar={() => agregarAlCarrito(p)} />
+            {grupos.map((grupo) => (
+              <TarjetaProductoAgrupada key={grupo.key} grupo={grupo} onAgregar={agregarAlCarrito} />
             ))}
             {productosFiltrados.length === 0 && (
               <p className="col-span-full text-sm text-neutral-500">

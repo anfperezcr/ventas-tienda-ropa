@@ -12,10 +12,11 @@ declare const self: ServiceWorkerGlobalScope;
 
 // Precachea el shell de la app (HTML/JS/CSS) para que la PWA pueda abrir
 // sin conexión -- las respuestas de datos (productos, ventas, etc.) NO se
-// cachean acá, viven en IndexedDB (Fase 7.2+). A diferencia del hermano,
-// no hay regla de runtime caching para imágenes de Supabase Storage --
-// Fase 3 decidió no tener bucket de storage, logos/imágenes son URLs
-// externas sueltas.
+// cachean acá, viven en IndexedDB (Fase 7.2+). Sí existe un bucket de
+// Supabase Storage para fotos de producto (src/lib/storage/), pero
+// todavía no hay regla de runtime caching para esas imágenes -- quedan
+// sirviéndose directo de la red cuando hay conexión; agregarla es trabajo
+// aparte, no bloqueante para el flujo offline esencial (vender/stock/caja).
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
   skipWaiting: true,

@@ -7,9 +7,11 @@ const initialState: AjustarStockState = { error: null, stockResultante: null };
 
 export function AjustarStockForm({
   stockActual,
+  talla,
   action,
 }: {
   stockActual: number;
+  talla?: string;
   action: (prevState: AjustarStockState, formData: FormData) => Promise<AjustarStockState>;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -20,7 +22,7 @@ export function AjustarStockForm({
       className="flex w-full flex-col gap-3 rounded-2xl border border-neutral-200 p-6 text-sm"
     >
       <h2 className="font-semibold">
-        Ajustar stock (actual: {state.stockResultante ?? stockActual})
+        Ajustar stock{talla ? ` · Talla ${talla}` : ""} (actual: {state.stockResultante ?? stockActual})
       </h2>
       <label className="flex flex-col gap-1">
         Cantidad (positivo suma, negativo resta)

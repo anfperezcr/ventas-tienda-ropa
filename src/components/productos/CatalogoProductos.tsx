@@ -31,7 +31,28 @@ const ESTADO_BADGE: Record<EstadoProducto, string> = {
   inactivo: "bg-neutral-100 text-neutral-600",
 };
 
-function IconoProducto({ nombre }: { nombre: string }) {
+// key={imagenUrl} en el componente completo (no solo en el <img>) --
+// fuerza a que el estado de error se reinicie cuando cambia de fila con
+// una URL distinta, no solo cuando cambia el <img> del mismo componente.
+function IconoProducto({ producto }: { producto: Producto }) {
+  return <IconoProductoInterno key={producto.imagenUrl ?? "sin-imagen"} producto={producto} />;
+}
+
+function IconoProductoInterno({ producto }: { producto: Producto }) {
+  const [error, setError] = useState(false);
+
+  if (producto.imagenUrl && !error) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria del owner, sin dominios configurados para next/image
+      <img
+        src={producto.imagenUrl}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded-lg object-cover"
+        onError={() => setError(true)}
+      />
+    );
+  }
+
   return (
     <div
       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-xs font-semibold"
@@ -40,7 +61,7 @@ function IconoProducto({ nombre }: { nombre: string }) {
         color: "var(--brand-600)",
       }}
     >
-      {iniciales(nombre)}
+      {iniciales(producto.nombre)}
     </div>
   );
 }
@@ -212,7 +233,7 @@ export function CatalogoProductos({
                 return (
                   <tr key={p.id} className="border-b border-neutral-100 last:border-0">
                     <td className="flex items-center gap-2 p-3">
-                      <IconoProducto nombre={p.nombre} />
+                      <IconoProducto producto={p} />
                       {p.nombre}
                     </td>
                     <td className="p-3">{p.categoriaNombre}</td>
@@ -258,7 +279,7 @@ export function CatalogoProductos({
                 key={p.id}
                 className="flex items-center gap-3 rounded-xl border border-neutral-200 p-4"
               >
-                <IconoProducto nombre={p.nombre} />
+                <IconoProducto producto={p} />
                 <div className="flex-1">
                   <div className="font-medium">
                     {p.nombre} · Talla {p.talla}
