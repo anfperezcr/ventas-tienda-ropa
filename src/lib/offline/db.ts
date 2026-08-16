@@ -21,6 +21,12 @@ export const EVENTO_VENTAS_PENDIENTES_ACTUALIZADO = "ventas-pendientes:actualiza
 // el estado optimista (calcularEstadoEfectivo, src/lib/offline/caja.ts).
 export const EVENTO_CAJA_PENDIENTE_ACTUALIZADO = "caja-pendiente:actualizado";
 
+// Se dispara cuando SyncProvider termina un ciclo completo sin errores de
+// red/acceso (ver guardarUltimaSincronizacion) -- el indicador "Última
+// sincronización" del dashboard lo escucha para no depender solo de su
+// propio intervalo de refresco.
+export const EVENTO_ULTIMA_SINCRONIZACION_ACTUALIZADA = "ultima-sincronizacion:actualizada";
+
 type CajaSnapshotValue = {
   localId: number;
   estado: EstadoTurno;
@@ -152,6 +158,27 @@ export async function guardarProductosCache(
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(EVENTO_CATALOGO_ACTUALIZADO));
   }
+}
+
+// "Última sincronización" (dashboard, ticket §punto 5): se guarda en el
+// mismo store "meta" que ya usa productos_actualizado_en, bajo su propia
+// clave. Representa "la última vez que SyncProvider completó un ciclo
+// sin que verificarAccesoTenant fallara" -- no "la última vez que hubo
+// algo nuevo que subir" (ver comentario en SyncProvider.tsx), para que
+// de verdad refleje si el dispositivo está al día con el servidor.
+const CLAVE_ULTIMA_SINCRONIZACION = "ultima_sincronizacion_en";
+
+export async function guardarUltimaSincronizacion(tenantId: string): Promise<void> {
+  const db = await getDB(tenantId);
+  await db.put("meta", new Date().toISOString(), CLAVE_ULTIMA_SINCRONIZACION);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(EVENTO_ULTIMA_SINCRONIZACION_ACTUALIZADA));
+  }
+}
+
+export async function obtenerUltimaSincronizacion(tenantId: string): Promise<string | undefined> {
+  const db = await getDB(tenantId);
+  return db.get("meta", CLAVE_ULTIMA_SINCRONIZACION);
 }
 
 export async function listarProductosCache(

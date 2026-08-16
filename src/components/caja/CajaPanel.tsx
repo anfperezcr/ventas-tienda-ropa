@@ -38,6 +38,7 @@ import {
   IconoBombilla,
   type IconoProps,
 } from "./IconosCaja";
+import { DonutMetodosPago, COLOR_EFECTIVO, COLOR_NEQUI, COLOR_DAVIPLATA } from "@/components/graficos/DonutMetodosPago";
 
 const TABS = [
   { valor: "todos", etiqueta: "Todos" },
@@ -57,9 +58,6 @@ const ICONO_TIPO: Record<string, ComponenteIcono> = {
 };
 
 const MOSTRAR_INICIAL = 5;
-const COLOR_EFECTIVO = "var(--brand-600)";
-const COLOR_NEQUI = "#7C3AED";
-const COLOR_DAVIPLATA = "#F97316";
 
 // Todos los emoji nativos de la vista anterior se reemplazaron por
 // IconosCaja.tsx (SVG monocromo, stroke=currentColor) -- los emoji
@@ -115,56 +113,6 @@ function Tarjeta({
       <div className="text-lg font-semibold">{valor}</div>
       <div className="text-xs text-neutral-400">{subtitulo}</div>
     </div>
-  );
-}
-
-function DonutVentasPorMetodo({
-  efectivo,
-  nequi,
-  daviplata,
-}: {
-  efectivo: number;
-  nequi: number;
-  daviplata: number;
-}) {
-  const total = efectivo + nequi + daviplata;
-  const R = 40;
-  const C = 2 * Math.PI * R;
-
-  const segmentos =
-    total === 0
-      ? []
-      : [
-          { color: COLOR_EFECTIVO, valor: efectivo },
-          { color: COLOR_NEQUI, valor: nequi },
-          { color: COLOR_DAVIPLATA, valor: daviplata },
-        ].filter((s) => s.valor > 0);
-
-  let acumulado = 0;
-
-  return (
-    <svg viewBox="0 0 100 100" className="h-24 w-24 shrink-0 -rotate-90" role="img" aria-label="Ventas por método">
-      <circle cx="50" cy="50" r={R} fill="none" stroke="var(--brand-100, #e5e7eb)" strokeWidth="12" />
-      {segmentos.map((s, i) => {
-        const frac = s.valor / total;
-        const largo = frac * C;
-        const offset = -((acumulado / total) * C);
-        acumulado += s.valor;
-        return (
-          <circle
-            key={i}
-            cx="50"
-            cy="50"
-            r={R}
-            fill="none"
-            stroke={s.color}
-            strokeWidth="12"
-            strokeDasharray={`${largo} ${C - largo}`}
-            strokeDashoffset={offset}
-          />
-        );
-      })}
-    </svg>
   );
 }
 
@@ -435,7 +383,7 @@ export function CajaPanel({
               <p className="text-xs text-neutral-400">{pct(estadoMostrado.ventasDaviplata).toFixed(1)}%</p>
             </div>
           </div>
-          <DonutVentasPorMetodo
+          <DonutMetodosPago
             efectivo={estadoMostrado.ventasEfectivo}
             nequi={estadoMostrado.ventasNequi}
             daviplata={estadoMostrado.ventasDaviplata}

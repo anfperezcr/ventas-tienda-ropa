@@ -113,6 +113,15 @@ export function IconoPuntos(p: IconoProps) {
   );
 }
 
+export function IconoRecibo(p: IconoProps) {
+  return (
+    <Base {...p}>
+      <path d="M6 2.5h12v19l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5-2-1.5z" />
+      <path d="M8.5 8h7M8.5 11.5h7M8.5 15h4" />
+    </Base>
+  );
+}
+
 export function IconoChevron(p: IconoProps) {
   return (
     <Base {...p}>

@@ -20,6 +20,7 @@ import {
   listarMovimientosPendientes,
   marcarMovimientoPendienteError,
   eliminarMovimientoPendiente,
+  guardarUltimaSincronizacion,
   type MovimientoCajaInput,
 } from "@/lib/offline/db";
 
@@ -140,6 +141,16 @@ export function SyncProvider({ tenantId }: { tenantId: string }) {
         drenarVentasPendientes(tenantId).catch(() => false),
         drenarMovimientosPendientes(tenantId).catch(() => false),
       ]);
+      if (cancelado) return;
+
+      // Llegar hasta acá significa que verificarAccesoTenant respondió (el
+      // dispositivo tiene red y el tenant sigue activo) -- eso es lo que
+      // "última sincronización" representa: un ciclo completo sin
+      // fallar por conexión, no "hubo algo nuevo que subir". Si
+      // verificarAccesoTenant hubiera fallado, ya se habría retornado
+      // arriba sin llegar hasta acá.
+      await guardarUltimaSincronizacion(tenantId);
+
       // Algo se sincronizó de verdad -- refresca la página actual (ej.
       // CajaPanel) para que su estado optimista se reconcilie con lo que
       // ahora es cierto en el servidor, sin esperar a la próxima

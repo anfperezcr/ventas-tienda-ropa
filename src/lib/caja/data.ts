@@ -1,6 +1,7 @@
 import type postgres from "postgres";
 import { withTenant } from "@/lib/db/tenant";
 import type { SessionPayload } from "@/lib/auth/session";
+import { rangoDiaBogota } from "@/lib/fechas/bogota";
 import { type ItemBitacora, METODO_LABEL, TIPO_MOVIMIENTO_LABEL } from "./labels";
 
 export type { ItemBitacora };
@@ -176,5 +177,111 @@ export async function listarMovimientosTurno(
     }));
 
     return [...itemsMovimientos, ...itemsVentas].sort((a, b) => b.fecha.localeCompare(a.fecha));
+  });
+}
+
+// Para el dashboard: a diferencia de listarMovimientosTurno, NO está
+// atada a un turno específico (evita la ambigüedad de "¿cuál turno?"
+// cuando el owner tiene varios locales con turnos abiertos en
+// paralelo) -- es simplemente "lo que pasó hoy", mismo rango que
+// obtenerResumenDashboard. Mismo criterio de siempre: empleado fuerza
+// su propio local, sin importar qué pida el llamador.
+export async function listarMovimientosRecientes(
+  session: SessionPayload,
+  limite = 5
+): Promise<ItemBitacora[]> {
+  const localId = session.rol === "empleado" ? session.localId : null;
+  const { inicio } = rangoDiaBogota();
+
+  return withTenant(session.tenantId!, async (tx) => {
+    const movimientos = await tx<
+      { fecha: string; tipo: string; monto: number; motivo: string | null; usuario_nombre: string }[]
+    >`
+      select mc.fecha, mc.tipo, mc.monto, mc.motivo, u.nombre as usuario_nombre
+      from movimientos_caja mc
+      join usuarios u on u.id = mc.usuario_id
+      where mc.fecha >= ${inicio}
+        and (${localId}::bigint is null or mc.local_id = ${localId})
+    `;
+
+    const ventasRows = await tx<
+      { id: number; fecha: string; id_venta_publico: string; total: number; usuario_nombre: string }[]
+    >`
+      select v.id, v.fecha, v.id_venta_publico, v.total, u.nombre as usuario_nombre
+      from ventas v
+      join usuarios u on u.id = v.usuario_id
+      where v.fecha >= ${inicio}
+        and (${localId}::bigint is null or v.local_id = ${localId})
+    `;
+
+    const pagosRows = ventasRows.length
+      ? await tx<{ venta_id: number; metodo: string }[]>`
+          select venta_id, metodo from pagos where venta_id = any(${ventasRows.map((v) => v.id)})
+        `
+      : [];
+    const metodosPorVenta = new Map<number, string[]>();
+    for (const p of pagosRows) {
+      const lista = metodosPorVenta.get(p.venta_id) ?? [];
+      lista.push(METODO_LABEL[p.metodo] ?? p.metodo);
+      metodosPorVenta.set(p.venta_id, lista);
+    }
+
+    const itemsMovimientos: ItemBitacora[] = movimientos.map((m) => ({
+      clase: "movimiento",
+      fecha: new Date(m.fecha).toISOString(),
+      tipo: m.tipo,
+      descripcion: TIPO_MOVIMIENTO_LABEL[m.tipo] ?? m.tipo,
+      metodoOMotivo: m.motivo ?? "—",
+      monto: m.monto,
+      usuario: m.usuario_nombre,
+    }));
+
+    const itemsVentas: ItemBitacora[] = ventasRows.map((v) => ({
+      clase: "venta",
+      fecha: new Date(v.fecha).toISOString(),
+      tipo: "venta",
+      descripcion: `Venta #${v.id_venta_publico}`,
+      metodoOMotivo: (metodosPorVenta.get(v.id) ?? []).join(" + "),
+      monto: v.total,
+      usuario: v.usuario_nombre,
+    }));
+
+    return [...itemsMovimientos, ...itemsVentas]
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .slice(0, limite);
+  });
+}
+
+export type SaldoCajaDashboard = {
+  monto: number;
+  hayTurnosAbiertos: boolean;
+};
+
+// Para el dashboard: empleado ve SOLO el saldo de su propio local (nunca
+// debe poder inferir cuánto efectivo hay en otras sucursales). Owner ve
+// la suma de todos los turnos actualmente abiertos del tenant -- mismo
+// criterio "consolidado" que ya usa el resto del dashboard para owner
+// (ventas/transacciones/clientes ya son totales de todo el tenant, no
+// de un local elegido a mano).
+export async function obtenerSaldoCajaDashboard(session: SessionPayload): Promise<SaldoCajaDashboard> {
+  return withTenant(session.tenantId!, async (tx) => {
+    if (session.rol === "empleado") {
+      const estado = await obtenerEstadoTurnoTx(tx, session.localId!);
+      return estado.abierto
+        ? { monto: estado.saldoEsperado, hayTurnosAbiertos: true }
+        : { monto: 0, hayTurnosAbiertos: false };
+    }
+
+    const locales = await tx<{ id: number }[]>`select id from locales`;
+    let total = 0;
+    let hayTurnosAbiertos = false;
+    for (const l of locales) {
+      const estado = await obtenerEstadoTurnoTx(tx, l.id);
+      if (estado.abierto) {
+        total += estado.saldoEsperado;
+        hayTurnosAbiertos = true;
+      }
+    }
+    return { monto: total, hayTurnosAbiertos };
   });
 }

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { requireTenantSession } from "@/lib/auth/guards";
 import { obtenerResumenDashboard } from "@/lib/dashboard/data";
+import { obtenerSaldoCajaDashboard, listarMovimientosRecientes } from "@/lib/caja/data";
+import { listarUltimasVentas } from "@/lib/ventas/data";
+import { obtenerConsejoDelDia } from "@/lib/consejos";
 import { iniciales } from "@/lib/iniciales";
 import { DashboardPanel } from "@/components/dashboard/DashboardPanel";
 import {
@@ -28,12 +31,24 @@ const TARJETAS = [
 
 export default async function DashboardPage() {
   const session = await requireTenantSession();
-  const resumen = await obtenerResumenDashboard(session);
+  const [resumen, saldoCaja, ultimasVentas, movimientosRecientes] = await Promise.all([
+    obtenerResumenDashboard(session),
+    obtenerSaldoCajaDashboard(session),
+    listarUltimasVentas(session),
+    listarMovimientosRecientes(session),
+  ]);
+  const consejoDelDia = obtenerConsejoDelDia();
   const tarjetas = TARJETAS.filter((t) => !t.soloOwner || session.rol === "owner");
+  const fechaHoyBogota = new Date().toLocaleDateString("es-CO", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "America/Bogota",
+  });
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 p-6">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">¡Bienvenido, {session.nombre}!</h1>
           <p className="text-sm text-neutral-500">Esto es lo que pasa hoy en tu tienda.</p>
@@ -41,8 +56,27 @@ export default async function DashboardPage() {
 
         {/* Sin funcionalidad todavía -- estilo "próximamente" a propósito
             (bordes punteados, colores apagados, cursor deshabilitado) para
-            que no se confundan con controles reales. */}
-        <div className="flex items-center gap-2">
+            que no se confundan con controles reales. Un selector de fecha
+            real implicaría que todo el panel acepte un rango arbitrario en
+            vez de "hoy" fijo -- cambio de backend real, fuera de alcance
+            por ahora (ver CLAUDE.md / decisión del punto 3). */}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled
+            title="Próximamente"
+            className="cursor-not-allowed rounded-lg border border-dashed border-neutral-200 px-3 py-1.5 text-xs text-neutral-300"
+          >
+            {fechaHoyBogota} ▾
+          </button>
+          <button
+            type="button"
+            disabled
+            title="Próximamente"
+            className="cursor-not-allowed rounded-lg border border-dashed border-neutral-200 px-3 py-1.5 text-xs text-neutral-300"
+          >
+            Hoy ▾
+          </button>
           <button
             type="button"
             disabled
@@ -92,7 +126,15 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <DashboardPanel resumen={resumen} />
+      <DashboardPanel
+        resumen={resumen}
+        saldoCaja={saldoCaja}
+        ultimasVentas={ultimasVentas}
+        movimientosRecientes={movimientosRecientes}
+        consejoDelDia={consejoDelDia}
+        tenantId={session.tenantId!}
+        esOwner={session.rol === "owner"}
+      />
     </main>
   );
 }
