@@ -9,7 +9,8 @@
     "lint": "eslint",
     "seed": "tsx scripts/seed-tenant.ts",
     "seed:super-admin": "tsx scripts/seed-super-admin.ts",
-    "verificar-rls": "tsx scripts/verificar-rls.ts"
+    "verificar-rls": "tsx scripts/verificar-rls.ts",
+    "detectar-tallas-duplicadas": "tsx scripts/detectar-tallas-duplicadas.ts"
   },
   "dependencies": {
     "@serwist/turbopack": "^9.5.12",

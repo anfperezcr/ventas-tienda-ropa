@@ -35,7 +35,15 @@ function prefijoPublico(): string {
 
 export type SubirImagenResultado = { ok: true; url: string } | { ok: false; error: string };
 
-export async function subirImagenProductoStorage(
+// Sube dentro de una "carpeta" (prefijo de ruta) del mismo bucket
+// "productos" -- reusado tanto por fotos de producto (carpeta "productos",
+// ruta productos/{tenantId}/{uuid}.ext) como por logos de tienda (carpeta
+// "logos", ruta logos/{tenantId}/{uuid}.ext). Mismo bucket, mismo patrón
+// de validación/compresión/subida; solo cambia el prefijo, para no crear
+// un bucket nuevo por cada tipo de imagen (CLAUDE.md: "mismo patrón, no
+// una fase nueva").
+async function subirAStorage(
+  carpeta: string,
   tenantId: string,
   archivo: File
 ): Promise<SubirImagenResultado> {
@@ -47,7 +55,7 @@ export async function subirImagenProductoStorage(
     return { ok: false, error: "La imagen no puede pesar más de 5MB" };
   }
 
-  const ruta = `${tenantId}/${randomUUID()}.${extension}`;
+  const ruta = `${carpeta}/${tenantId}/${randomUUID()}.${extension}`;
   const { error } = await obtenerCliente()
     .storage.from(BUCKET)
     .upload(ruta, archivo, { contentType: archivo.type, upsert: false });
@@ -62,8 +70,9 @@ export async function subirImagenProductoStorage(
 
 // Best-effort, nunca lanza. Si la URL no vive en nuestro bucket (el owner
 // pegó un link externo en vez de subir un archivo), no hace nada -- nunca
-// intentamos borrar algo que no subimos nosotros.
-export async function borrarImagenProductoStorageSiPropia(url: string | null): Promise<void> {
+// intentamos borrar algo que no subimos nosotros. Sirve tanto para fotos
+// de producto como para logos: la carpeta ya viene codificada en la URL.
+async function borrarDeStorageSiPropia(url: string | null): Promise<void> {
   if (!url) return;
   const prefijo = prefijoPublico();
   if (!url.startsWith(prefijo)) return;
@@ -75,3 +84,17 @@ export async function borrarImagenProductoStorageSiPropia(url: string | null): P
     // Huérfano en Storage -- no es motivo para fallar nada más.
   }
 }
+
+export function subirImagenProductoStorage(
+  tenantId: string,
+  archivo: File
+): Promise<SubirImagenResultado> {
+  return subirAStorage("productos", tenantId, archivo);
+}
+
+export function subirLogoStorage(tenantId: string, archivo: File): Promise<SubirImagenResultado> {
+  return subirAStorage("logos", tenantId, archivo);
+}
+
+export const borrarImagenProductoStorageSiPropia = borrarDeStorageSiPropia;
+export const borrarLogoStorageSiPropia = borrarDeStorageSiPropia;

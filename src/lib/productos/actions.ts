@@ -5,6 +5,7 @@ import postgres from "postgres";
 import { withTenant } from "@/lib/db/tenant";
 import { requireOwner, requireTenantSession } from "@/lib/auth/guards";
 import { listarProductos, type Producto } from "./data";
+import { normalizarTalla } from "./talla";
 import {
   subirImagenProductoStorage,
   borrarImagenProductoStorageSiPropia,
@@ -148,7 +149,7 @@ export async function guardarGrupoProducto(input: GuardarGrupoInput): Promise<Gu
             insert into productos
               (tenant_id, nombre, categoria_id, talla, precio, stock, stock_minimo, local_id, imagen_url)
             values (
-              ${session.tenantId}, ${nombre}, ${input.categoriaId}, ${fila.talla.trim()},
+              ${session.tenantId}, ${nombre}, ${input.categoriaId}, ${normalizarTalla(fila.talla)},
               ${fila.precio}, ${fila.stock}, ${input.stockMinimo}, ${input.localId}, ${imagenUrl}
             )
           `;
@@ -184,7 +185,7 @@ export async function guardarGrupoProducto(input: GuardarGrupoInput): Promise<Gu
           update productos
           set nombre = ${nombre},
               categoria_id = ${input.categoriaId},
-              talla = ${fila.talla.trim()},
+              talla = ${normalizarTalla(fila.talla)},
               precio = ${fila.precio},
               stock_minimo = ${input.stockMinimo},
               local_id = ${input.localId},

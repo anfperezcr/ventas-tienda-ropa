@@ -24,8 +24,8 @@ export default async function TiendaLayout({
       style={{ "--brand-600": configuracion.colorPrimario } as CSSProperties}
     >
       <SyncProvider tenantId={session.tenantId!} />
-      <nav className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 text-sm">
-        <div className="flex items-center gap-4 font-medium">
+      <nav className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-neutral-200 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-medium">
           {configuracion.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria del owner, sin dominios configurados para next/image
             <img
@@ -44,7 +44,7 @@ export default async function TiendaLayout({
           {session.rol === "owner" && <Link href="/usuarios">Usuarios</Link>}
           {session.rol === "owner" && <Link href="/configuracion">Configuración</Link>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <IndicadorMetodoEntrada />
           <span className="text-neutral-500">
             {session.nombre} · {session.rol}

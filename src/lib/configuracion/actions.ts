@@ -3,6 +3,22 @@
 import { revalidatePath } from "next/cache";
 import { withTenant } from "@/lib/db/tenant";
 import { requireOwner } from "@/lib/auth/guards";
+import {
+  subirLogoStorage,
+  borrarLogoStorageSiPropia,
+  type SubirImagenResultado,
+} from "@/lib/storage/imagenesProducto";
+
+export async function subirLogo(formData: FormData): Promise<SubirImagenResultado> {
+  const session = await requireOwner();
+
+  const archivo = formData.get("archivo");
+  if (!(archivo instanceof File)) {
+    return { ok: false, error: "No se recibió ningún archivo" };
+  }
+
+  return subirLogoStorage(session.tenantId!, archivo);
+}
 
 export type ConfiguracionFormState = {
   error: string | null;
@@ -19,6 +35,7 @@ export async function actualizarConfiguracion(
   const nombreNegocio = String(formData.get("nombreNegocio") ?? "").trim();
   const colorPrimario = String(formData.get("colorPrimario") ?? "").trim();
   const logoUrl = String(formData.get("logoUrl") ?? "").trim();
+  const logoUrlAnterior = String(formData.get("logoUrlAnterior") ?? "").trim();
   const mensajeRecibo = String(formData.get("mensajeRecibo") ?? "").trim();
 
   if (!nombreNegocio) {
@@ -57,6 +74,13 @@ export async function actualizarConfiguracion(
   // slug, sin cascada a rutas anidadas debajo (no hay ninguna acá) --
   // así el cambio de marca se ve también en la página pública de login.
   revalidatePath("/login/[slug]", "page");
+
+  if (logoUrlAnterior && logoUrlAnterior !== logoUrl) {
+    // Best-effort, fuera de la transacción -- mismo patrón que
+    // guardarGrupoProducto: si falla queda un huérfano en Storage, pero
+    // la configuración ya se guardó y no se revierte por esto.
+    void borrarLogoStorageSiPropia(logoUrlAnterior);
+  }
 
   return { error: null };
 }

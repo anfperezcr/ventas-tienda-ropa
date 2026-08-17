@@ -1,45 +1,61 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import {
   actualizarConfiguracion,
   type ConfiguracionFormState,
 } from "@/lib/configuracion/actions";
 import type { Configuracion } from "@/lib/configuracion/data";
 import { iniciales } from "@/lib/iniciales";
+import { useSubidaLogo } from "@/hooks/useSubidaLogo";
+import { IconoConfiguracion, IconoRecibo } from "@/components/dashboard/iconos";
+import { IconoEdificio, IconoPaleta, IconoOjo, IconoGuardar } from "./IconosConfiguracion";
 import { SelectorMetodoEntrada } from "./SelectorMetodoEntrada";
 
 const initialState: ConfiguracionFormState = { error: null };
 const HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 
+const MENSAJE_ESTADO: Record<string, string> = {
+  comprimiendo: "Comprimiendo imagen...",
+  subiendo: "Subiendo imagen...",
+};
+
 export function ConfiguracionForm({ configuracion }: { configuracion: Configuracion }) {
   const [state, formAction, pending] = useActionState(actualizarConfiguracion, initialState);
+  const inputArchivoRef = useRef<HTMLInputElement>(null);
 
   const [nombreNegocio, setNombreNegocio] = useState(configuracion.nombreNegocio);
   const [colorPrimario, setColorPrimario] = useState(configuracion.colorPrimario);
   const [colorTexto, setColorTexto] = useState(configuracion.colorPrimario);
-  const [logoUrl, setLogoUrl] = useState(configuracion.logoUrl ?? "");
-  const [logoError, setLogoError] = useState(false);
+  const [modoLogo, setModoLogo] = useState<"archivo" | "url">("archivo");
+  const [logoErrorCarga, setLogoErrorCarga] = useState(false);
   const [mensajeRecibo, setMensajeRecibo] = useState(configuracion.mensajeRecibo);
+
+  const logo = useSubidaLogo(configuracion.logoUrl ?? null);
 
   function restablecer() {
     setNombreNegocio(configuracion.nombreNegocio);
     setColorPrimario(configuracion.colorPrimario);
     setColorTexto(configuracion.colorPrimario);
-    setLogoUrl(configuracion.logoUrl ?? "");
-    setLogoError(false);
+    setModoLogo("archivo");
+    setLogoErrorCarga(false);
+    logo.establecerUrlDirecta(configuracion.logoUrl ?? "");
     setMensajeRecibo(configuracion.mensajeRecibo);
   }
 
+  const mostrandoLogo = logo.urlMostrada?.trim() && !logoErrorCarga;
+
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
+      <input type="hidden" name="logoUrl" value={logo.imagenGuardada ?? ""} />
+      <input type="hidden" name="logoUrlAnterior" value={configuracion.logoUrl ?? ""} />
+
       <div className="flex items-center gap-3">
         <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
           style={{ backgroundColor: "color-mix(in srgb, var(--brand-600) 12%, white)" }}
-          aria-hidden="true"
         >
-          ⚙️
+          <IconoConfiguracion className="h-6 w-6 text-[var(--brand-600)]" />
         </div>
         <div>
           <h1 className="text-xl font-semibold">Configuración</h1>
@@ -53,7 +69,7 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-neutral-200 p-4">
             <h2 className="mb-3 flex items-center gap-2 font-semibold">
-              <span aria-hidden="true">🏢</span> Información del negocio
+              <IconoEdificio className="h-5 w-5 text-neutral-500" /> Información del negocio
             </h2>
             <label className="flex flex-col gap-1 text-sm">
               Nombre del negocio
@@ -71,10 +87,10 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
 
           <div className="rounded-2xl border border-neutral-200 p-4">
             <h2 className="mb-3 flex items-center gap-2 font-semibold">
-              <span aria-hidden="true">🎨</span> Identidad visual
+              <IconoPaleta className="h-5 w-5 text-neutral-500" /> Identidad visual
             </h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-sm">
+              <label className="flex min-w-0 flex-col gap-1 text-sm">
                 Color primario
                 <div className="flex gap-2">
                   <input
@@ -97,7 +113,7 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
                       if (HEX_REGEX.test(val)) setColorPrimario(val);
                     }}
                     placeholder="#000000"
-                    className="flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-lg uppercase"
+                    className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-4 py-3 text-lg uppercase"
                   />
                 </div>
                 <span className="text-xs text-neutral-500">
@@ -105,31 +121,86 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
                 </span>
               </label>
 
-              <label className="flex flex-col gap-1 text-sm">
-                Logo (URL, opcional)
-                <input
-                  type="url"
-                  inputMode="url"
-                  name="logoUrl"
-                  value={logoUrl}
-                  onChange={(e) => {
-                    setLogoUrl(e.target.value);
-                    setLogoError(false);
-                  }}
-                  placeholder="https://..."
-                  className="rounded-lg border border-neutral-300 px-4 py-3 text-lg"
-                />
+              <div className="flex flex-col gap-1 text-sm">
+                Logo del negocio
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModoLogo("archivo")}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                      modoLogo === "archivo"
+                        ? "border-[var(--brand-600)] text-[var(--brand-600)]"
+                        : "border-neutral-300 text-neutral-600"
+                    }`}
+                  >
+                    Desde mi dispositivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoLogo("url")}
+                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${
+                      modoLogo === "url"
+                        ? "border-[var(--brand-600)] text-[var(--brand-600)]"
+                        : "border-neutral-300 text-neutral-600"
+                    }`}
+                  >
+                    Desde URL
+                  </button>
+                </div>
+
+                {modoLogo === "archivo" ? (
+                  <div>
+                    <input
+                      ref={inputArchivoRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const archivo = e.target.files?.[0];
+                        setLogoErrorCarga(false);
+                        if (archivo) logo.manejarArchivo(archivo);
+                        e.target.value = "";
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => inputArchivoRef.current?.click()}
+                      className="w-full rounded-lg border border-dashed border-neutral-300 px-4 py-3 text-left text-sm text-neutral-600"
+                    >
+                      Elegir imagen (JPG, PNG o WEBP, máx 5MB)
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="url"
+                    inputMode="url"
+                    defaultValue={logo.imagenGuardada ?? ""}
+                    onChange={(e) => {
+                      setLogoErrorCarga(false);
+                      logo.establecerUrlDirecta(e.target.value);
+                    }}
+                    placeholder="https://..."
+                    className="w-full rounded-lg border border-neutral-300 px-4 py-3 text-lg"
+                  />
+                )}
+
+                {(logo.estado === "comprimiendo" || logo.estado === "subiendo") && (
+                  <p className="text-xs text-neutral-500">{MENSAJE_ESTADO[logo.estado]}</p>
+                )}
+                {logo.estado === "error" && (
+                  <p className="text-xs text-red-600">{logo.error}</p>
+                )}
                 <span className="text-xs text-neutral-500">
                   Se usará en impresiones y reportes.
                 </span>
-              </label>
+              </div>
             </div>
-            {logoUrl.trim() && (
+            {logo.imagenGuardada && (
               <button
                 type="button"
                 onClick={() => {
-                  setLogoUrl("");
-                  setLogoError(false);
+                  logo.quitarImagen();
+                  setLogoErrorCarga(false);
                 }}
                 className="mt-2 text-sm text-red-600"
               >
@@ -140,7 +211,7 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
 
           <div className="rounded-2xl border border-neutral-200 p-4">
             <h2 className="mb-3 flex items-center gap-2 font-semibold">
-              <span aria-hidden="true">🧾</span> Recibo
+              <IconoRecibo className="h-5 w-5 text-neutral-500" /> Recibo
             </h2>
             <label className="flex flex-col gap-1 text-sm">
               Mensaje de recibo
@@ -165,7 +236,7 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-neutral-200 p-4">
             <h2 className="mb-1 flex items-center gap-2 font-semibold">
-              <span aria-hidden="true">👁️</span> Vista previa
+              <IconoOjo className="h-5 w-5 text-neutral-500" /> Vista previa
             </h2>
             <p className="mb-3 text-xs text-neutral-500">
               Así se verá tu negocio en la aplicación y documentos.
@@ -177,14 +248,14 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
                 backgroundColor: `color-mix(in srgb, ${colorPrimario} 10%, white)`,
               }}
             >
-              {logoUrl.trim() && !logoError ? (
-                // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria del owner, sin dominios configurados para next/image
+              {mostrandoLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element -- preview local (object URL) o URL externa, sin dominios configurados para next/image
                 <img
-                  key={logoUrl.trim()}
-                  src={logoUrl.trim()}
+                  key={logo.urlMostrada}
+                  src={logo.urlMostrada!}
                   alt=""
                   className="h-12 w-12 rounded-lg object-cover"
-                  onError={() => setLogoError(true)}
+                  onError={() => setLogoErrorCarga(true)}
                 />
               ) : (
                 <div
@@ -235,12 +306,10 @@ export function ConfiguracionForm({ configuracion }: { configuracion: Configurac
         </button>
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || logo.estado === "comprimiendo" || logo.estado === "subiendo"}
           className="flex flex-1 items-center justify-center gap-3 rounded-lg bg-[var(--brand-600)] px-4 py-3 text-white disabled:opacity-60"
         >
-          <span className="text-lg" aria-hidden="true">
-            💾
-          </span>
+          <IconoGuardar className="h-5 w-5" />
           <span>
             <span className="block text-sm font-medium">
               {pending ? "Guardando..." : "Guardar cambios"}
