@@ -6,3 +6,27 @@
   --brand-600: #0f6f66;
   --brand-700: #115e59;
 }
+
+/* Imprime solo el recibo de venta (#recibo-imprimible), sin importar qué
+   más haya alrededor (nav, banners, el resto del layout) -- oculta todo
+   por visibilidad y vuelve a mostrar únicamente ese elemento y sus hijos,
+   reposicionado al origen de la página. Ver VentaForm.tsx. */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 4mm;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #recibo-imprimible,
+  #recibo-imprimible * {
+    visibility: visible;
+  }
+  #recibo-imprimible {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

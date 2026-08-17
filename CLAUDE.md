@@ -126,7 +126,7 @@ productos
 
 ventas
   id, tenant_id, fecha, hora, usuario_id, cliente_id, local_id,
-  total, id_venta_publico   -- el que se imprime en el recibo
+  total, descuento, id_venta_publico   -- el que se imprime en el recibo
 
 detalle_venta
   id, tenant_id, venta_id, producto_id, cantidad, precio_unitario
@@ -144,6 +144,7 @@ movimientos_caja
 
 Notas:
 - Un pago mixto = 2+ filas en `pagos` para la misma `venta_id`.
+- `descuento` es un monto fijo en COP aplicado al total de la venta completa (no por línea de producto) — `total` ya queda neto del descuento, y `descuento` se guarda aparte solo para mostrarlo en el recibo. Se valida dentro de `registrar_venta` (nunca puede ser mayor al subtotal).
 - `stock_minimo` por defecto 5, editable por el owner.
 - Cada `cliente` (comprador final) tiene un id único que se imprime en su recibo.
 - El JWT de sesión lleva `{ usuario_id, rol, tenant_id }`. Todo endpoint de API valida y filtra por ese `tenant_id` (excepto los endpoints exclusivos de `super_admin`).
@@ -168,9 +169,21 @@ Debe incluir:
 - Nombre del cliente (de `clientes`)
 - Fecha y hora
 - ID único de venta (`id_venta_publico`)
-- Detalle de productos (nombre, cantidad, precio)
-- Desglose de pago: efectivo / Nequi / Daviplata / mixto, mostrando cuánto de cada uno
+- Vendedor y local donde se hizo la venta
+- Detalle de productos (nombre, talla, cantidad, precio)
+- Subtotal y descuento (solo si `descuento > 0`)
+- Desglose de pago: efectivo / Nequi / Daviplata / mixto, mostrando cuánto de cada uno, y el cambio si lo hay
 - Mensaje personalizable, default: "Gracias por su compra, bendiciones"
+- Logo del negocio (`configuracion_tenant.logo_url`), si el tenant subió uno
+
+Implementado en `VentaForm.tsx` como una pantalla de confirmación con
+botón "Imprimir recibo" (`window.print()` + CSS `@media print` que aísla
+`#recibo-imprimible`, ver `globals.css`) — no depende del puente
+ESC/POS de Fase 8 (que todavía no existe), funciona con cualquier
+impresora/diálogo de impresión del sistema operativo. Solo se construye
+para ventas confirmadas online (con `id_venta_publico` real); una venta
+guardada sin conexión mantiene el mensaje corto de "se sincronizará" hasta
+que de verdad tenga un ticket.
 
 ---
 

@@ -17,6 +17,7 @@ import {
 import { generarClientRef } from "@/lib/offline/clientRef";
 import { iniciales } from "@/lib/iniciales";
 import { soloDigitos } from "@/lib/soloDigitos";
+import type { Configuracion } from "@/lib/configuracion/data";
 
 type ItemCarrito = {
   productoId: number;
@@ -172,20 +173,41 @@ function TarjetaProductoAgrupada({
   );
 }
 
+type ResultadoVenta = {
+  idVentaPublico: string | null;
+  pendiente: boolean;
+  fecha: Date;
+  clienteNombre: string | null;
+  items: { nombre: string; talla: string; cantidad: number; precioUnitario: number }[];
+  subtotal: number;
+  descuento: number;
+  total: number;
+  pagos: FilaPago[];
+  cambio: number;
+};
+
 export function VentaForm({
   localId,
+  localNombre,
   productos: productosIniciales,
   tenantId,
+  vendedorNombre,
+  configuracion,
 }: {
   localId: number;
+  localNombre: string;
   productos: Producto[];
   tenantId: string;
+  vendedorNombre: string;
+  configuracion: Configuracion;
 }) {
   const [productos, setProductos] = useState<Producto[]>(productosIniciales);
   const [busquedaProducto, setBusquedaProducto] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
   const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
   const [pagos, setPagos] = useState<FilaPago[]>([{ metodo: "efectivo", monto: 0 }]);
+  const [mostrarDescuento, setMostrarDescuento] = useState(false);
+  const [descuento, setDescuento] = useState(0);
   const [telefono, setTelefono] = useState("");
   const [nombreCliente, setNombreCliente] = useState("");
   const [busqueda, setBusqueda] = useState<
@@ -193,11 +215,7 @@ export function VentaForm({
   >("idle");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{
-    idVentaPublico: string | null;
-    total: number;
-    pendiente: boolean;
-  } | null>(null);
+  const [resultado, setResultado] = useState<ResultadoVenta | null>(null);
 
   // El shell de esta página puede venir del cache del service worker sin
   // red -- en ese caso `productosIniciales` (render server-side de la
@@ -247,7 +265,12 @@ export function VentaForm({
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   })();
 
-  const total = carrito.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+  const subtotal = carrito.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+  // Derivado, no estado propio -- si el carrito se achica (ej. se quita un
+  // producto) después de fijar un descuento, esto lo recorta solo en el
+  // siguiente render, sin necesitar un efecto que llame setState.
+  const descuentoAplicado = Math.min(descuento, subtotal);
+  const total = Math.max(0, subtotal - descuentoAplicado);
   const totalPagos = pagos.reduce((sum, p) => sum + p.monto, 0);
   const efectivoTotal = pagos
     .filter((p) => p.metodo === "efectivo")
@@ -351,6 +374,7 @@ export function VentaForm({
     setEnviando(true);
     setError(null);
 
+    const pagosFinales = netearCambioEnEfectivo(pagos, cambio);
     const input: RegistrarVentaInput = {
       localId,
       clienteTelefono: telefono.trim() || null,
@@ -360,15 +384,35 @@ export function VentaForm({
         cantidad: i.cantidad,
         precioUnitario: i.precioUnitario,
       })),
-      pagos: netearCambioEnEfectivo(pagos, cambio),
+      pagos: pagosFinales,
       clientRef: generarClientRef(),
+      descuento: descuentoAplicado,
+    };
+
+    // Capturado antes de que nuevaVenta() limpie el carrito -- es lo que
+    // se pinta en el recibo, independiente de que la venta haya quedado
+    // online o encolada.
+    const snapshot = {
+      fecha: new Date(),
+      clienteNombre: nombreCliente.trim() || null,
+      items: carrito.map((i) => ({
+        nombre: i.nombre,
+        talla: i.talla,
+        cantidad: i.cantidad,
+        precioUnitario: i.precioUnitario,
+      })),
+      subtotal,
+      descuento: descuentoAplicado,
+      total,
+      pagos: pagosFinales.filter((p) => p.monto > 0),
+      cambio,
     };
 
     // Sin conexión: ni se intenta -- directo a la cola. Ahorra el
     // round-trip garantizado a fallar y evita la espera del timeout.
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       await encolarVentaPendiente(tenantId, input.clientRef!, input, total);
-      setResultado({ idVentaPublico: null, total, pendiente: true });
+      setResultado({ ...snapshot, idVentaPublico: null, pendiente: true });
       setEnviando(false);
       return;
     }
@@ -379,7 +423,7 @@ export function VentaForm({
         setError(res.error);
         return;
       }
-      setResultado({ idVentaPublico: res.idVentaPublico, total, pendiente: false });
+      setResultado({ ...snapshot, idVentaPublico: res.idVentaPublico, pendiente: false });
     } catch {
       // Server Action inalcanzable (falla de red durante el intento, no
       // detectada por navigator.onLine de antemano) -- se encola igual en
@@ -388,7 +432,7 @@ export function VentaForm({
       // contra el último stock cacheado, y registrar_venta re-valida al
       // sincronizar.
       await encolarVentaPendiente(tenantId, input.clientRef!, input, total);
-      setResultado({ idVentaPublico: null, total, pendiente: true });
+      setResultado({ ...snapshot, idVentaPublico: null, pendiente: true });
     } finally {
       setEnviando(false);
     }
@@ -397,6 +441,8 @@ export function VentaForm({
   function nuevaVenta() {
     setCarrito([]);
     setPagos([{ metodo: "efectivo", monto: 0 }]);
+    setMostrarDescuento(false);
+    setDescuento(0);
     setTelefono("");
     setNombreCliente("");
     setBusqueda("idle");
@@ -405,25 +451,134 @@ export function VentaForm({
   }
 
   if (resultado) {
-    return (
-      <div className="flex flex-col items-center gap-4 rounded-2xl border border-neutral-200 p-6 text-center">
-        <h1 className="text-xl font-semibold">
-          {resultado.pendiente ? "Venta guardada" : "Venta registrada"}
-        </h1>
-        {resultado.pendiente ? (
+    // La venta offline todavía no tiene id_venta_publico real (se asigna
+    // al sincronizar) -- se deja el mensaje corto de siempre en vez de un
+    // recibo completo con un ticket que podría no coincidir después.
+    if (resultado.pendiente) {
+      return (
+        <div className="flex flex-col items-center gap-4 rounded-2xl border border-neutral-200 p-6 text-center">
+          <h1 className="text-xl font-semibold">Venta guardada</h1>
           <p className="rounded-lg bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
             Sin conexión — se sincronizará sola apenas vuelva la señal.
           </p>
-        ) : (
-          <p className="text-sm text-neutral-500">Ticket #{resultado.idVentaPublico}</p>
-        )}
-        <p className="text-lg font-medium">Total: ${resultado.total.toLocaleString("es-CO")}</p>
-        <button
-          onClick={nuevaVenta}
-          className="rounded-lg bg-[var(--brand-600)] px-4 py-3 text-lg font-medium text-white"
+          <p className="text-lg font-medium">Total: ${resultado.total.toLocaleString("es-CO")}</p>
+          <button
+            onClick={nuevaVenta}
+            className="rounded-lg bg-[var(--brand-600)] px-4 py-3 text-lg font-medium text-white"
+          >
+            Nueva venta
+          </button>
+        </div>
+      );
+    }
+
+    const fechaTexto = resultado.fecha.toLocaleDateString("es-CO", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+      timeZone: "America/Bogota",
+    });
+    const horaTexto = resultado.fecha.toLocaleTimeString("es-CO", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "America/Bogota",
+    });
+
+    return (
+      <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+        <div
+          id="recibo-imprimible"
+          className="flex flex-col gap-3 rounded-2xl border border-neutral-200 p-6 text-sm print:rounded-none print:border-0 print:p-0"
         >
-          Nueva venta
-        </button>
+          <div className="flex flex-col items-center gap-2 text-center">
+            {configuracion.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- URL externa arbitraria del owner, sin dominios configurados para next/image
+              <img
+                src={configuracion.logoUrl}
+                alt=""
+                className="h-12 w-12 rounded-lg object-cover"
+              />
+            )}
+            <p className="text-lg font-semibold">{configuracion.nombreNegocio}</p>
+            <p className="text-xs text-neutral-500">
+              {localNombre} · {vendedorNombre}
+            </p>
+            <p className="text-xs text-neutral-500">
+              {fechaTexto} · {horaTexto}
+            </p>
+            <p className="text-xs text-neutral-500">Ticket #{resultado.idVentaPublico}</p>
+            {resultado.clienteNombre && (
+              <p className="text-xs text-neutral-500">Cliente: {resultado.clienteNombre}</p>
+            )}
+          </div>
+
+          <div className="border-t border-dashed border-neutral-300 pt-3">
+            {resultado.items.map((i, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-2 py-0.5">
+                <span className="min-w-0 flex-1">
+                  {i.nombre} · Talla {i.talla}
+                  <span className="text-neutral-500"> × {i.cantidad}</span>
+                </span>
+                <span className="shrink-0 text-right">
+                  {formatCOP(i.cantidad * i.precioUnitario)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-dashed border-neutral-300 pt-3">
+            {resultado.descuento > 0 && (
+              <>
+                <div className="flex items-center justify-between text-neutral-500">
+                  <span>Subtotal</span>
+                  <span>{formatCOP(resultado.subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-neutral-500">
+                  <span>Descuento</span>
+                  <span>-{formatCOP(resultado.descuento)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex items-center justify-between text-base font-semibold">
+              <span>Total</span>
+              <span>{formatCOP(resultado.total)}</span>
+            </div>
+          </div>
+
+          <div className="border-t border-dashed border-neutral-300 pt-3 text-neutral-500">
+            {resultado.pagos.map((p, idx) => (
+              <div key={idx} className="flex items-center justify-between">
+                <span>{METODOS.find((m) => m.valor === p.metodo)?.etiqueta ?? p.metodo}</span>
+                <span>{formatCOP(p.monto)}</span>
+              </div>
+            ))}
+            {resultado.cambio > 0 && (
+              <div className="flex items-center justify-between">
+                <span>Cambio</span>
+                <span>{formatCOP(resultado.cambio)}</span>
+              </div>
+            )}
+          </div>
+
+          <p className="border-t border-dashed border-neutral-300 pt-3 text-center text-xs text-neutral-500">
+            {configuracion.mensajeRecibo}
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 print:hidden">
+          <button
+            onClick={() => window.print()}
+            className="rounded-lg border border-neutral-300 px-4 py-3 text-lg font-medium"
+          >
+            Imprimir recibo
+          </button>
+          <button
+            onClick={nuevaVenta}
+            className="rounded-lg bg-[var(--brand-600)] px-4 py-3 text-lg font-medium text-white"
+          >
+            Nueva venta
+          </button>
+        </div>
       </div>
     );
   }
@@ -566,7 +721,48 @@ export function VentaForm({
               </div>
             </div>
           ))}
-          <div className="mt-2 text-right font-semibold">
+          {mostrarDescuento ? (
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-sm text-neutral-500">Descuento</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                data-teclado-moneda="true"
+                value={descuentoAplicado || ""}
+                onChange={(e) =>
+                  setDescuento(Math.min(Number(soloDigitos(e.target.value)), subtotal))
+                }
+                placeholder="0"
+                className="w-28 rounded-lg border border-neutral-300 px-3 py-1.5 text-right"
+              />
+              <button
+                onClick={() => {
+                  setDescuento(0);
+                  setMostrarDescuento(false);
+                }}
+                className="text-sm text-red-600"
+              >
+                Quitar
+              </button>
+            </div>
+          ) : (
+            carrito.length > 0 && (
+              <button
+                onClick={() => setMostrarDescuento(true)}
+                className="mt-2 text-sm text-[var(--brand-600)]"
+              >
+                + Aplicar descuento
+              </button>
+            )
+          )}
+
+          {descuentoAplicado > 0 && (
+            <div className="mt-2 flex items-center justify-between text-sm text-neutral-500">
+              <span>Subtotal</span>
+              <span>${subtotal.toLocaleString("es-CO")}</span>
+            </div>
+          )}
+          <div className="mt-1 text-right font-semibold">
             Total: ${total.toLocaleString("es-CO")}
           </div>
         </div>

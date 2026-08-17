@@ -17,6 +17,9 @@ export type RegistrarVentaInput = {
   // idempotente en vez de crear un duplicado. Ver Fase 7.3 /
   // 0010_ventas_client_ref.sql.
   clientRef: string | null;
+  // Monto fijo en COP aplicado al total de la venta (no por línea) --
+  // 0013_ventas_descuento.sql. 0 = sin descuento.
+  descuento: number;
 };
 
 export type RegistrarVentaResult =
@@ -36,7 +39,15 @@ export async function registrarVenta(
     return { ok: false, error: "El carrito está vacío" };
   }
 
-  const total = input.items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+  const subtotal = input.items.reduce((sum, i) => sum + i.cantidad * i.precioUnitario, 0);
+  if (!Number.isInteger(input.descuento) || input.descuento < 0) {
+    return { ok: false, error: "El descuento debe ser un entero mayor o igual a 0" };
+  }
+  if (input.descuento > subtotal) {
+    return { ok: false, error: "El descuento no puede ser mayor al subtotal" };
+  }
+
+  const total = subtotal - input.descuento;
   const totalPagos = input.pagos.reduce((sum, p) => sum + p.monto, 0);
   if (total <= 0 || total !== totalPagos) {
     return { ok: false, error: "La suma de los pagos no coincide con el total" };
@@ -81,7 +92,7 @@ export async function registrarVenta(
       const [row] = await tx<{ registrar_venta: number }[]>`
         select registrar_venta(
           ${session.tenantId}, ${session.usuarioId}, ${input.localId}, ${clienteId},
-          ${tx.json(items)}, ${tx.json(pagosFiltrados)}, ${input.clientRef}
+          ${tx.json(items)}, ${tx.json(pagosFiltrados)}, ${input.clientRef}, ${input.descuento}
         )
       `;
 
@@ -104,6 +115,9 @@ export async function registrarVenta(
     }
     if (mensaje.includes("no pertenece a este local")) {
       return { ok: false, error: "Alguno de los productos no pertenece a este local" };
+    }
+    if (mensaje.includes("descuento")) {
+      return { ok: false, error: "El descuento no es válido" };
     }
     return { ok: false, error: "No se pudo registrar la venta" };
   }
